@@ -56,10 +56,11 @@ float VISUALLOOKATZ;
 
 void readParameters(const string &config_file)
 {
-  cv::FileStorage fsSettings(config_file.c_str(), cv::FileStorage::READ);
+  cv::FileStorage fsSettings(config_file, cv::FileStorage::READ);
   if(!fsSettings.isOpened())
   {
     std::cerr << "ERROR: Wrong path to settings " << config_file << std::endl;
+    throw std::runtime_error("Failed to open config file");
   }
 
   VINS_FOLDER_PATH = getcwd(NULL, FILENAMEPATH_MAX);

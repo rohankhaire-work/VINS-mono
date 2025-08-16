@@ -1,11 +1,17 @@
 #!/bin/bash
 set -e  # stop if any command fails
+CMAKE_FLAGS=""
 
 # If running as root, don't use sudo; otherwise, use sudo
 if [ "$EUID" -eq 0 ]; then
     SUDO=""
 else
     SUDO="sudo"
+fi
+
+. /etc/os-release
+if [ "$VERSION_ID" = "22.04" ]; then
+    CMAKE_FLAGS="-DSUITESPARSE=OFF -DBUILD_TESTING=OFF"
 fi
 
 #######################
@@ -37,7 +43,7 @@ mkdir -p ceres-bin
 cd ceres-bin
 
 # Configure and build
-cmake ../ceres-solver-1.14.0
+cmake ../ceres-solver-1.14.0 $CMAKE_FLAGS 
 make -j$(nproc)
 make test || true   # don't fail if some tests break
 $SUDO make install

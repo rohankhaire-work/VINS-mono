@@ -499,7 +499,7 @@ void process_loop_detection()
           cv::Mat gray_img, loop_match_img;
           cv::Mat old_img = old_kf->image;
           cv::hconcat(old_img, current_image, gray_img);
-          cvtColor(gray_img, loop_match_img, CV_GRAY2RGB);
+          cvtColor(gray_img, loop_match_img, cv::COLOR_GRAY2RGB);
           cv::Mat loop_match_img2;
           loop_match_img2 = loop_match_img.clone();
           /*
@@ -952,7 +952,7 @@ void img_callback(const cv::Mat &show_img, const ros::Time &timestamp)
 
     /*----------------add ui ---------------------*/
     cv::Mat tmp_img = show_img.rowRange(0, ROW);
-    cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
+    cv::cvtColor(show_img, tmp_img, cv::COLOR_GRAY2RGB);
     for(unsigned int j = 0; j < trackerData[0].cur_pts.size(); j++)
     {
       double len
@@ -960,7 +960,7 @@ void img_callback(const cv::Mat &show_img, const ros::Time &timestamp)
       cv::circle(tmp_img, trackerData[0].cur_pts[j], 2,
                  cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
     }
-    cv::namedWindow("vins", CV_WINDOW_NORMAL);
+    cv::namedWindow("vins", cv::WINDOW_NORMAL);
     cv::imshow("vins", tmp_img);
     cv::waitKey(5);
     /*----------------add ui ---------------------*/
@@ -972,11 +972,11 @@ void LoadVideoFrames(const string &strVideoPath, const string &strTimesStampsPat
                      vector<double> &timeStamps)
 {
   // Get total number of images
-  cv::VideoCapture cap(strvideoPath);
+  cv::VideoCapture cap(strVideoPath);
   if(!cap.isOpened())
   {
-    std::cerr << "Error opening video file: " << videoPath << std::endl;
-    return -1;
+    std::cerr << "Error opening video file: " << strVideoPath << std::endl;
+    return;
   }
   int frameCount = 0;
   cv::Mat frame;
@@ -1097,10 +1097,10 @@ int main(int argc, char **argv)
   fImus.open(argv[4]);
 
   cv::Mat image;
-  int ni; // num image
+  size_t ni; // num image
 
   // read parameters section
-  readParameters(argv[1]);
+  readParameters(string(argv[1]));
 
   estimator.setParameter();
   for(int i = 0; i < NUM_OF_CAM; i++)
@@ -1113,10 +1113,10 @@ int main(int argc, char **argv)
   auto visual_format = string(argv[2]);
   auto visual_timestamps = string(argv[3]);
   bool video;
-  if(visual_format.rfind(".mp4") == filename.size() - 4)
+  if(visual_format.rfind(".mp4") == visual_format.size() - 4)
   {
     video = true;
-    LoadVideoFrame(visual_format, visual_timestamps, vTimeStamps);
+    LoadVideoFrames(visual_format, visual_timestamps, vTimeStamps);
   }
   else
   {
@@ -1159,7 +1159,7 @@ int main(int argc, char **argv)
     }
     else
     {
-      image = cv::imread(vStrImagesFileNames[ni], CV_LOAD_IMAGE_UNCHANGED);
+      image = cv::imread(vStrImagesFileNames[ni], cv::IMREAD_UNCHANGED);
     }
 
     // Check if Image is properly loaded
