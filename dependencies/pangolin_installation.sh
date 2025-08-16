@@ -34,6 +34,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
                -DCMAKE_CXX_FLAGS="$CXX_FLAGS"
 cmake --build build -j$(nproc)
 $SUDO cmake --install build
+$SUDO ldconfig
 
 # Remove tar and ceres-bin
 cd ..
