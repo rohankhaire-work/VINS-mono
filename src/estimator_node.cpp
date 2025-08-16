@@ -968,8 +968,8 @@ void img_callback(const cv::Mat &show_img, const ros::Time &timestamp)
   //  ROS_INFO("whole feature tracker processing costs: %f", t_r.toc());
 }
 /******************* load image begin ***********************/
-void LoadImages(const string &strVideoPath, const string &strTimesStampsPath,
-                vector<double> &timeStamps)
+void LoadVideoFrames(const string &strVideoPath, const string &strTimesStampsPath,
+                     vector<double> &timeStamps)
 {
   // Get total number of images
   cv::VideoCapture cap(strvideoPath);
@@ -1000,6 +1000,29 @@ void LoadImages(const string &strVideoPath, const string &strTimesStampsPath,
     {
       stringstream ss;
       ss << s;
+      double t;
+      ss >> t;
+      timeStamps.push_back(t / 1e9);
+    }
+  }
+}
+
+void LoadImages(const string &strImagePath, const string &strTimesStampsPath,
+                vector<string> &strImagesFileNames, vector<double> &timeStamps)
+{
+  ifstream fTimes;
+  fTimes.open(strTimesStampsPath.c_str());
+  timeStamps.reserve(5000); // reserve vector space
+  strImagesFileNames.reserve(5000);
+  while(!fTimes.eof())
+  {
+    string s;
+    getline(fTimes, s);
+    if(!s.empty())
+    {
+      stringstream ss;
+      ss << s;
+      strImagesFileNames.push_back(strImagePath + "/" + ss.str() + ".png");
       double t;
       ss >> t;
       timeStamps.push_back(t / 1e9);
@@ -1083,10 +1106,23 @@ int main(int argc, char **argv)
   for(int i = 0; i < NUM_OF_CAM; i++)
     trackerData[i].readIntrinsicParameter(CAM_NAMES[i]); // add
 
-  // Load from .mp4 file
+  // Load from .mp4 file or
+  // Load from images
+  vector<string> vStrImagesFileNames;
   vector<double> vTimeStamps;
-  LoadImages(string(argv[2]), string(argv[3]), vTimeStamps);
-
+  auto visual_format = string(argv[2]);
+  auto visual_timestamps = string(argv[3]);
+  bool video;
+  if(visual_format.rfind(".mp4") == filename.size() - 4)
+  {
+    video = true;
+    LoadVideoFrame(visual_format, visual_timestamps, vTimeStamps);
+  }
+  else
+  {
+    video = false;
+    LoadImages(visual_format, visual_timestamps, vStrImagesFileNames, vTimeStamps);
+  }
   std::thread measurement_process{process};
 
   measurement_process.detach();
@@ -1115,17 +1151,23 @@ int main(int argc, char **argv)
     LoadImus(fImus, image_timestamp);
 
     // Get the frame from video
-    cv::VideoCapture cap(string(argv[2]));
-
-    if(!cap.isOpened())
+    cv::Mat image;
+    if(video)
     {
-      std::cerr << "Error opening video file: " << string(argv[2]) << std::endl;
-      return -1;
+      cv::VideoCapture cap(visual_format);
+      cap >> image;
+    }
+    else
+    {
+      image = cv::imread(vStrImagesFileNames[ni], CV_LOAD_IMAGE_UNCHANGED);
     }
 
-    // Read camera frame
-    cv::Mat frame;
-    cap >> frame;
+    // Check if Image is properly loaded
+    if(image.empty())
+    {
+      cerr << endl << "Failed to load image: " << vStrImagesFileNames[ni] << endl;
+      return 1;
+    }
 
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     img_callback(image, image_timestamp);
