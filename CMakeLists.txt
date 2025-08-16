@@ -11,6 +11,7 @@ find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(Ceres REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem program_options system)
 find_package(Pangolin REQUIRED)
+find_package(OpenCV REQUIRED)
 
 add_executable(vins_estimator
     src/estimator_node.cpp
@@ -39,22 +40,23 @@ add_executable(vins_estimator
     src/loop-closure/keyframe.cpp
     src/loop-closure/keyframe_database.cpp
     src/feature_tracker/feature_tracker.cpp 
-    src/camera_model/chessboard/Chessboard.cc
-    src/camera_model/calib/CameraCalibration.cc
-    src/camera_model/camera_models/Camera.cc
-    src/camera_model/camera_models/CameraFactory.cc
-    src/camera_model/camera_models/CostFunctionFactory.cc
-    src/camera_model/camera_models/PinholeCamera.cc
-    src/camera_model/camera_models/CataCamera.cc
-    src/camera_model/camera_models/EquidistantCamera.cc
-    src/camera_model/camera_models/ScaramuzzaCamera.cc
-    src/camera_model/sparse_graph/Transform.cc
-    src/camera_model/gpl/gpl.cc
-    src/camera_model/gpl/EigenQuaternionParameterization.cc
+    src/camera_model/src/chessboard/Chessboard.cc
+    src/camera_model/src/calib/CameraCalibration.cc
+    src/camera_model/src/camera_models/Camera.cc
+    src/camera_model/src/camera_models/CameraFactory.cc
+    src/camera_model/src/camera_models/CostFunctionFactory.cc
+    src/camera_model/src/camera_models/PinholeCamera.cc
+    src/camera_model/src/camera_models/CataCamera.cc
+    src/camera_model/src/camera_models/EquidistantCamera.cc
+    src/camera_model/src/camera_models/ScaramuzzaCamera.cc
+    src/camera_model/src/sparse_graph/Transform.cc
+    src/camera_model/src/gpl/gpl.cc
+    src/camera_model/src/gpl/EigenQuaternionParameterization.cc
     )
 
 target_include_directories(vins_estimator PRIVATE src
                                                   src/rosmsg_headers
+                                                  src/camera_model/include
                                                   ${OpenCV_INCLUDE_DIRS}
                                                   ${PANGOLIN_INCLUDE_DIR} 
                                                   ${CERES_INCLUDE_DIRS})

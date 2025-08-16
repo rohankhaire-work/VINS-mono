@@ -1,38 +1,46 @@
 #!/bin/bash
 set -e  # stop if any command fails
 
+# If running as root, don't use sudo; otherwise, use sudo
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
 #######################
 #### DEPENDENCIES #####
 #######################
-sudo apt-get update
-sudo apt-get install -y \
+$SUDO apt update
+$SUDO apt install -y \
     wget \
     cmake \
-    libunwind-dev \
-    libgoogle-glog-dev libgflags-dev \
+    libgflags-dev \
     libatlas-base-dev \
     libeigen3-dev \
-    libsuitesparse-dev
+    libsuitesparse-dev \
+    libunwind-dev \
+    libgoogle-glog-dev
 
 ##############################
 ##### CERES ##################
 ##############################
 # Download Ceres tarball if not already present
-if [ ! -f ceres-solver-2.2.0.tar.gz ]; then
-    wget https://github.com/ceres-solver/ceres-solver/archive/refs/tags/2.2.0.tar.gz -O ceres-solver-2.2.0.tar.gz
+if [ ! -f ceres-solver-1.14.0tar.gz ]; then
+    $SUDO wget https://github.com/ceres-solver/ceres-solver/archive/refs/tags/1.14.0.tar.gz -O ceres-solver-1.14.0.tar.gz
 fi
-
+0
 # Extract
-tar zxf ceres-solver-2.2.0.tar.gz
+tar zxf ceres-solver-1.14.0.tar.gz
 mkdir -p ceres-bin
 cd ceres-bin
 
 # Configure and build
-cmake ../ceres-solver-2.2.0
+cmake ../ceres-solver-1.14.0
 make -j$(nproc)
 make test || true   # don't fail if some tests break
-sudo make install
+$SUDO make install
 
 # Remove tar and ceres-bin
 cd ..
-rm -rf ceres-solver-2.2.0.tar.gz ceres-bin ceres-solver-2.2.0
+rm -rf ceres-solver-1.14.0.tar.gz ceres-bin ceres-solver-1.14.0

@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e  # stop if any command fails
 
+# If running as root, don't use sudo; otherwise, use sudo
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
 # Python wheel dependencies
 python3 -m pip install --upgrade pip
 python3 -m pip install wheel setuptools
@@ -13,12 +20,12 @@ if [ ! -d Pangolin ]; then
 fi
 
 cd Pangolin
-sudo ./scripts/install_prerequisites.sh recommended
+./scripts/install_prerequisites.sh recommended
 
 # Configure, build, and install
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
 cmake --build build -j$(nproc)
-sudo cmake --install build
+$SUDO cmake --install build
 
 # Remove tar and ceres-bin
 cd ..
