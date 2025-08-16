@@ -1,30 +1,30 @@
-#include <stdio.h>
-#include <queue>
-#include <map>
-#include <thread>
-#include <mutex>
 #include <condition_variable>
+#include <map>
+#include <mutex>
 #include <opencv2/opencv.hpp>
+#include <queue>
+#include <stdio.h>
+#include <thread>
 
-#include "estimator.h"
-#include "parameters.h"
-#include "utility/visualization.h"
-#include "loop-closure/loop_closure.h"
-#include "loop-closure/keyframe.h"
-#include "loop-closure/keyframe_database.h"
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
+#include "estimator.h"
+#include "loop-closure/keyframe.h"
+#include "loop-closure/keyframe_database.h"
+#include "loop-closure/loop_closure.h"
+#include "parameters.h"
+#include "utility/visualization.h"
 /****************** load image section ***********************/
-#include <iostream>
-#include <fstream>
 #include <chrono>
+#include <fstream>
+#include <iostream>
 /****************** load image section ***********************/
 
 /****************** feature tracker section ***********************/
-#include "rosmsg/PointCloud.h"
-#include "rosmsg/Imu.h"
 #include "feature_tracker/feature_tracker.h"
+#include "rosmsg/Imu.h"
+#include "rosmsg/PointCloud.h"
 
 /************************* visualization ***********************/
 #include <pangolin/pangolin.h>
@@ -103,7 +103,8 @@ void ViewCameraPose(Eigen::Vector3d loop_correct_t, Eigen::Matrix3d loop_correct
     int i = idx2;
     Vector3d P = (loop_correct_r * estimator.Ps[i] + loop_correct_t)
                  + (loop_correct_r * estimator.Rs[i]) * estimator.tic[0];
-    // Quaterniond R = Quaterniond((loop_correct_r * estimator.Rs[i]) * estimator.ric[0]);
+    // Quaterniond R = Quaterniond((loop_correct_r * estimator.Rs[i]) *
+    // estimator.ric[0]);
     Eigen::Matrix3d R = (loop_correct_r * estimator.Rs[i]) * estimator.ric[0];
 
     M.m[0] = R(0, 0);
@@ -125,12 +126,12 @@ void ViewCameraPose(Eigen::Vector3d loop_correct_t, Eigen::Matrix3d loop_correct
     M.m[13] = P.y();
     M.m[14] = P.z();
     M.m[15] = 1.0;
-    //    cout << "M.m[0]:" <<M.m[0] << "M.m[1]:" << M.m[1] << "M.m[2]" << M.m[2] << endl;
-    //    cout << "M.m[4]:" <<M.m[4] << "M.m[5]:" << M.m[5] << "M.m[6]" << M.m[6] << endl;
-    //    cout << "M.m[8]:" <<M.m[8] << "M.m[9]:" << M.m[9] << "M.m[10]" << M.m[10] <<
-    //    endl;
-    //  cout << "M.m[12]:" <<M.m[12] << "M.m[13]:" << M.m[13] << "M.m[14]" << M.m[14] <<
-    //  endl;
+    //    cout << "M.m[0]:" <<M.m[0] << "M.m[1]:" << M.m[1] << "M.m[2]" <<
+    //    M.m[2] << endl; cout << "M.m[4]:" <<M.m[4] << "M.m[5]:" << M.m[5] <<
+    //    "M.m[6]" << M.m[6] << endl; cout << "M.m[8]:" <<M.m[8] << "M.m[9]:" <<
+    //    M.m[9] << "M.m[10]" << M.m[10] << endl;
+    //  cout << "M.m[12]:" <<M.m[12] << "M.m[13]:" << M.m[13] << "M.m[14]" <<
+    //  M.m[14] << endl;
   }
   else
     M.SetIdentity();
@@ -308,8 +309,9 @@ getMeasurements()
       IMUs.emplace_back(imu_buf.front());
       imu_buf.pop();
     }
-    // ROS_INFO_STREAM("IMUs end data timestamp: " << IMUs.back()->header.stamp << "IMUs
-    // size: "<< IMUs.size() << "img_msg timestamp" << img_msg->header.stamp );
+    // ROS_INFO_STREAM("IMUs end data timestamp: " << IMUs.back()->header.stamp
+    // << "IMUs size: "<< IMUs.size() << "img_msg timestamp" <<
+    // img_msg->header.stamp );
     measurements.emplace_back(IMUs, img_msg);
   }
   return measurements;
@@ -319,7 +321,8 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
   m_buf.lock();
   imu_buf.push(imu_msg);
-  // ROS_INFO("----------IMU DATA. timestamp %f------------",imu_msg->header.stamp.toSec());
+  // ROS_INFO("----------IMU DATA. timestamp
+  // %f------------",imu_msg->header.stamp.toSec());
   m_buf.unlock();
   //  con.notify_one();   //remove by solomon
 
@@ -362,8 +365,8 @@ void send_imu(const sensor_msgs::ImuConstPtr &imu_msg)
   double rx = imu_msg->angular_velocity.x - bg[0];
   double ry = imu_msg->angular_velocity.y - bg[1];
   double rz = imu_msg->angular_velocity.z - bg[2];
-  // ROS_DEBUG("IMU %f, dt: %f, acc: %f %f %f, gyr: %f %f %f", t, dt, dx, dy, dz, rx, ry,
-  // rz);
+  // ROS_DEBUG("IMU %f, dt: %f, acc: %f %f %f, gyr: %f %f %f", t, dt, dx, dy,
+  // dz, rx, ry, rz);
 
   estimator.processIMU(dt, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
 }
@@ -431,8 +434,10 @@ void process_loop_detection()
           // break;
           continue;
         }
-        //     ROS_DEBUG("loop succ %d with %drd image", global_frame_cnt, old_index);
-        // cout << "loop succ " <<global_frame_cnt <<  " with " << old_index << "rd image"
+        //     ROS_DEBUG("loop succ %d with %drd image", global_frame_cnt,
+        //     old_index);
+        // cout << "loop succ " <<global_frame_cnt <<  " with " << old_index <<
+        // "rd image"
         // << endl;
         assert(old_index != -1);
 
@@ -512,7 +517,8 @@ void process_loop_detection()
           {
               cv::Point2f cur_pt = cur_pts[i];
               cur_pt.x += COL ;
-              cv::line(loop_match_img, old_pts[i], cur_pt, cv::Scalar(0, 255, 0), 1, 8, 0);
+              cv::line(loop_match_img, old_pts[i], cur_pt, cv::Scalar(0, 255,
+          0), 1, 8, 0);
           }
           ostringstream convert;
           convert << "/home/tony-ws/raw_data/loop_image/"
@@ -547,7 +553,8 @@ void process_loop_detection()
       // release memory
       cur_kf->image.release();
       global_frame_cnt++;
-      //   cout << "---------keyframe_database.size():" << keyframe_database.size() << endl;
+      //   cout << "---------keyframe_database.size():" <<
+      //   keyframe_database.size() << endl;
       if(t_loop > 1000 || keyframe_database.size() > MAX_KEYFRAME_NUM)
       {
         m_keyframedatabase_resample.lock();
@@ -623,7 +630,8 @@ void process()
       auto img_msg = measurement.second;
       //      ROS_DEBUG("processing vision data with stamp %f \n",
       //      img_msg->header.stamp.toSec());
-      //    cout << "processing vision data with stamp "<<  img_msg->header.stamp.toSec()
+      //    cout << "processing vision data with stamp "<<
+      //    img_msg->header.stamp.toSec()
       //    << endl;
 
       TicToc t_s;
@@ -805,7 +813,8 @@ void img_callback(const cv::Mat &show_img, const ros::Time &timestamp)
         clahe->apply(show_img.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].cur_img);
       }
       else
-        //  trackerData[i].cur_img = ptr->image.rowRange(ROW * i, ROW * (i + 1));
+        //  trackerData[i].cur_img = ptr->image.rowRange(ROW * i, ROW * (i +
+        //  1));
         trackerData[i].cur_img = show_img.rowRange(ROW * i, ROW * (i + 1));
     }
 
@@ -886,8 +895,8 @@ void img_callback(const cv::Mat &show_img, const ros::Time &timestamp)
     sensor_msgs::ChannelFloat32 v_of_point;
 
     //  feature_points->header = img_msg->header;
-    feature_points->header.stamp
-      = timestamp; // here need to double check,because of missing seq variable assignment
+    feature_points->header.stamp = timestamp; // here need to double check,because of
+                                              // missing seq variable assignment
     feature_points->header.frame_id = "world";
 
     vector<set<int>> hash_ids(NUM_OF_CAM);
@@ -959,13 +968,30 @@ void img_callback(const cv::Mat &show_img, const ros::Time &timestamp)
   //  ROS_INFO("whole feature tracker processing costs: %f", t_r.toc());
 }
 /******************* load image begin ***********************/
-void LoadImages(const string &strImagePath, const string &strTimesStampsPath,
-                vector<string> &strImagesFileNames, vector<double> &timeStamps)
+void LoadImages(const string &strVideoPath, const string &strTimesStampsPath,
+                vector<double> &timeStamps)
 {
+  // Get total number of images
+  cv::VideoCapture cap(strvideoPath);
+  if(!cap.isOpened())
+  {
+    std::cerr << "Error opening video file: " << videoPath << std::endl;
+    return -1;
+  }
+  int frameCount = 0;
+  cv::Mat frame;
+  while(true)
+  {
+    cap >> frame;
+    if(frame.empty())
+      break;
+
+    frameCount++;
+  }
+
   ifstream fTimes;
   fTimes.open(strTimesStampsPath.c_str());
-  timeStamps.reserve(5000); // reserve vector space
-  strImagesFileNames.reserve(5000);
+  timeStamps.reserve(frameCount);
   while(!fTimes.eof())
   {
     string s;
@@ -974,7 +1000,6 @@ void LoadImages(const string &strImagePath, const string &strTimesStampsPath,
     {
       stringstream ss;
       ss << s;
-      strImagesFileNames.push_back(strImagePath + "/" + ss.str() + ".png");
       double t;
       ss >> t;
       timeStamps.push_back(t / 1e9);
@@ -1037,7 +1062,8 @@ int main(int argc, char **argv)
   if(argc != 5)
   {
     cerr << endl
-         << "Usage: ./vins_estimator path_to_setting_file path_to_image_folder "
+         << "Usage: ./vins_estimator path_to_setting_file "
+            "path_to_image_folder "
             "path_to_times_file path_to_imu_data_file"
          << endl;
     return 1;
@@ -1057,17 +1083,9 @@ int main(int argc, char **argv)
   for(int i = 0; i < NUM_OF_CAM; i++)
     trackerData[i].readIntrinsicParameter(CAM_NAMES[i]); // add
 
-  vector<string> vStrImagesFileNames;
+  // Load from .mp4 file
   vector<double> vTimeStamps;
-  LoadImages(string(argv[2]), string(argv[3]), vStrImagesFileNames, vTimeStamps);
-
-  int imageNum = vStrImagesFileNames.size();
-
-  if(imageNum <= 0)
-  {
-    cerr << "ERROR: Failed to load images" << endl;
-    return 1;
-  }
+  LoadImages(string(argv[2]), string(argv[3]), vTimeStamps);
 
   std::thread measurement_process{process};
 
@@ -1086,7 +1104,7 @@ int main(int argc, char **argv)
     // pose_graph.join();
     m_camera = CameraFactory::instance()->generateCameraFromYamlFile(CAM_NAMES_ESTIMATOR);
   }
-  for(ni = 0; ni < imageNum; ni++)
+  for(ni = 0; ni < vTimeStamps.size(); ni++)
   {
     double tframe = vTimeStamps[ni]; // timestamp
     uint32_t sec = tframe;
@@ -1096,14 +1114,19 @@ int main(int argc, char **argv)
     // read imu data
     LoadImus(fImus, image_timestamp);
 
-    // read image from file
-    image = cv::imread(vStrImagesFileNames[ni], CV_LOAD_IMAGE_UNCHANGED);
+    // Get the frame from video
+    cv::VideoCapture cap(string(argv[2]));
 
-    if(image.empty())
+    if(!cap.isOpened())
     {
-      cerr << endl << "Failed to load image: " << vStrImagesFileNames[ni] << endl;
-      return 1;
+      std::cerr << "Error opening video file: " << string(argv[2]) << std::endl;
+      return -1;
     }
+
+    // Read camera frame
+    cv::Mat frame;
+    cap >> frame;
+
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     img_callback(image, image_timestamp);
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -1112,17 +1135,18 @@ int main(int argc, char **argv)
 
     // wait to load the next frame image
     double T = 0;
-    if(ni < imageNum - 1)
-      T = vTimeStamps[ni + 1]
-          - tframe; // interval time between two consecutive frames,unit:second
-    else if(ni > 0) // lastest frame
+    if(ni < vTimeStamps.size() - 1)
+      T = vTimeStamps[ni + 1] - tframe; // interval time between two
+                                        // consecutive frames,unit:second
+    else if(ni > 0)                     // lastest frame
       T = tframe - vTimeStamps[ni - 1];
 
     if(timeSpent < T)
       usleep((T - timeSpent) * 1e6); // sec->us:1e6
     else
       cerr << endl
-           << "process image speed too slow, larger than interval time between two "
+           << "process image speed too slow, larger than interval time "
+              "between two "
               "consecutive frames"
            << endl;
   }
