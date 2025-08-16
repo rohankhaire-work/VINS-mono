@@ -11,7 +11,7 @@ cd dependencies
 ```
 
 # Build
-```
+``` bash
 # Working dir -> VINS-mono
 mkdir build && cd build
 cmake ..
