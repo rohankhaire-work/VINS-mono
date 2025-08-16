@@ -19,6 +19,7 @@ $SUDO apt install -y \
     libatlas-base-dev \
     libeigen3-dev \
     libsuitesparse-dev \
+    libtbb-dev \
     libunwind-dev \
     libgoogle-glog-dev
 
@@ -29,7 +30,7 @@ $SUDO apt install -y \
 if [ ! -f ceres-solver-1.14.0tar.gz ]; then
     $SUDO wget https://github.com/ceres-solver/ceres-solver/archive/refs/tags/1.14.0.tar.gz -O ceres-solver-1.14.0.tar.gz
 fi
-0
+
 # Extract
 tar zxf ceres-solver-1.14.0.tar.gz
 mkdir -p ceres-bin
