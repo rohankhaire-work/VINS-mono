@@ -13,6 +13,7 @@ find_package(Ceres REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem program_options system)
 find_package(Pangolin REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 add_executable(vins_estimator
     src/estimator_node.cpp

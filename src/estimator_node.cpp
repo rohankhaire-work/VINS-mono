@@ -1077,6 +1077,140 @@ void LoadImus(ifstream &fImus, const ros::Time &imageTimestamp)
     }
   }
 }
+
+IMUData gatherIMUData(std::ifstream &fImus)
+{
+  IMUData imu_data;
+  std::string s;
+
+  while(std::getline(fImus, s))
+  {
+    if(s.empty())
+      continue;
+
+    double timestampMs, ax, ay, az, gx, gy, gz;
+    std::stringstream ss(s);
+    std::string tmp;
+
+    if(!(ss >> tmp >> timestampMs))
+      continue;   // TimestampMs:
+    ss.ignore(1); // skip comma
+
+    if(!(ss >> tmp >> ax))
+      continue;
+    ss.ignore(1);
+
+    if(!(ss >> tmp >> ay))
+      continue;
+    ss.ignore(1);
+
+    if(!(ss >> tmp >> az))
+      continue;
+    ss.ignore(1);
+
+    if(!(ss >> tmp >> gx))
+      continue;
+    ss.ignore(1);
+
+    if(!(ss >> tmp >> gy))
+      continue;
+    ss.ignore(1);
+
+    if(!(ss >> tmp >> gz))
+      continue;
+
+    imu_data.time_ms.push_back(timestampMs);
+    imu_data.ax.push_back(ax);
+    imu_data.ay.push_back(ay);
+    imu_data.az.push_back(az);
+    imu_data.wx.push_back(gx);
+    imu_data.wy.push_back(gy);
+    imu_data.wz.push_back(gz);
+  }
+
+  return imu_data;
+}
+
+std::unordered_map<int, IMUData>
+mapFrameToIMU(const std::string &filename, const IMUData &imu_data)
+{
+  std::unordered_map<int, IMUData> frame_imu_mapping;
+  std::ifstream file(filename);
+  if(!file.is_open())
+  {
+    std::cerr << "Cannot open JSON file: " << filename << std::endl;
+    return {};
+  }
+
+  nlohmann::json j;
+  file >> j;
+  int cnt = 0;
+
+  for(auto it = j.begin(); it != j.end(); ++it)
+  {
+    IMUData imu;
+    std::string key = it.key();
+    std::vector<int> values = it.value().get<std::vector<int>>();
+    for(int i = 0; i < values.size(); ++i)
+    {
+      imu.time_ms.emplace_back(imu_data.time_ms.at(i));
+      imu.ax.emplace_back(imu_data.ax.at(i));
+      imu.ay.emplace_back(imu_data.ay.at(i));
+      imu.az.emplace_back(imu_data.az.at(i));
+      imu.wx.emplace_back(imu_data.wx.at(i));
+      imu.wy.emplace_back(imu_data.wy.at(i));
+      imu.wz.emplace_back(imu_data.wz.at(i));
+    }
+    frame_imu_mapping[cnt] = imu;
+    cnt++;
+  }
+
+  return frame_imu_mapping;
+}
+
+void LoadIMUJSON(const IMUData &imu_data, ros::Time img_timestamp)
+{
+  int cnt = 0;
+  // Iterate through the associated frame
+  while(true)
+  {
+    sensor_msgs::ImuPtr imudata(new sensor_msgs::Imu);
+    imudata->angular_velocity.x = imu_data.wx.at(cnt);
+    imudata->angular_velocity.y = imu_data.wy.at(cnt);
+    imudata->angular_velocity.z = imu_data.wz.at(cnt);
+    imudata->linear_acceleration.x = imu_data.ax.at(cnt);
+    imudata->linear_acceleration.y = imu_data.ay.at(cnt);
+    imudata->linear_acceleration.z = imu_data.az.at(cnt);
+
+    double t_ms = imu_data.time_ms.at(cnt);
+
+    uint32_t sec = static_cast<uint32_t>(t_ms / 1000.0);
+    uint32_t nsec = static_cast<uint32_t>((t_ms - sec * 1000.0) * 1e6);
+    nsec = (nsec / 1000) * 1000 + 500;
+    imudata->header.stamp = ros::Time(sec, nsec);
+
+    if(imudata->header.stamp > img_timestamp)
+      break;
+
+    imu_callback(imudata);
+    cnt++;
+  }
+}
+
+std::vector<double>
+setVideoTimestamps(const std::unordered_map<int, IMUData> &imu_mappings)
+{
+  std::vector<double> video_timestamps;
+  video_timestamps.reserve(imu_mappings.size());
+
+  for(const auto &pair : imu_mappings)
+  {
+    const IMUData &imu_data = pair.second;
+    video_timestamps.push_back(imu_data.time_ms[0]);
+  }
+
+  return video_timestamps;
+}
 /******************* load IMU end ***********************/
 
 int main(int argc, char **argv)
@@ -1093,8 +1227,21 @@ int main(int argc, char **argv)
   }
 
   // imu data file
-  ifstream fImus;
-  fImus.open(argv[4]);
+  ifstream fImus(argv[4]);
+
+  // Set correct flag
+  bool video = false;
+  bool image_timestamps = false;
+  bool imu_json = false;
+  auto visual_format = string(argv[2]);
+  auto visual_timestamps = string(argv[3]);
+  auto imu_data_format = string(argv[4]);
+  if(visual_format.rfind(".mp4") == visual_format.size() - 4)
+    video = true;
+  if(visual_timestamps.rfind(".txt") == visual_format.size() - 4)
+    image_timestamps = true;
+  if(imu_data_format.rfind(".json") == visual_format.size() - 5)
+    imu_json = true;
 
   cv::Mat image;
   size_t ni; // num image
@@ -1110,17 +1257,12 @@ int main(int argc, char **argv)
   // Load from images
   vector<string> vStrImagesFileNames;
   vector<double> vTimeStamps;
-  auto visual_format = string(argv[2]);
-  auto visual_timestamps = string(argv[3]);
-  bool video;
-  if(visual_format.rfind(".mp4") == visual_format.size() - 4)
+
+  // Process Image/Video
+  if(image_timestamps)
   {
-    video = true;
-    LoadVideoFrames(visual_format, visual_timestamps, vTimeStamps);
-  }
-  else
-  {
-    video = false;
+    if(video)
+      throw std::runtime_error("For .txt timestamps the input should be Image Path!");
     LoadImages(visual_format, visual_timestamps, vStrImagesFileNames, vTimeStamps);
   }
   std::thread measurement_process{process};
@@ -1140,15 +1282,35 @@ int main(int argc, char **argv)
     // pose_graph.join();
     m_camera = CameraFactory::instance()->generateCameraFromYamlFile(CAM_NAMES_ESTIMATOR);
   }
+
+  // Map frame to IMU
+  std::unordered_map<int, IMUData> frame_to_map;
+  IMUData imu_data;
+  if(video && !image_timestamps)
+  {
+    imu_data = gatherIMUData(fImus);
+    frame_to_map = mapFrameToIMU(visual_timestamps, imu_data);
+    vTimeStamps = setVideoTimestamps(frame_to_map);
+  }
+
+  // VIO LOOP
   for(ni = 0; ni < vTimeStamps.size(); ni++)
   {
     double tframe = vTimeStamps[ni]; // timestamp
-    uint32_t sec = tframe;
-    uint32_t nsec = (tframe - sec) * 1e9;
+    uint32_t sec = static_cast<uint32_t>(tframe / 1e3);
+    uint32_t nsec = static_cast<uint32_t>((tframe - sec * 1000.0) * 1e6);
     nsec = (nsec / 1000) * 1000 + 500;
     ros::Time image_timestamp = ros::Time(sec, nsec);
+
     // read imu data
-    LoadImus(fImus, image_timestamp);
+    if(imu_json)
+    {
+      LoadImus(fImus, image_timestamp);
+    }
+    else
+    {
+      LoadIMUJSON(imu_data, image_timestamp);
+    }
 
     // Get the frame from video
     cv::Mat image;

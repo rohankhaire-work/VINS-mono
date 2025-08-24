@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <queue>
 #include <opencv2/core/eigen.hpp>
+#include <nlohmann/json.hpp>
 
 struct RetriveData
 {
@@ -40,6 +41,11 @@ struct RetriveData
   Quaterniond relative_q;
   double relative_yaw;
   double loop_pose[7];
+};
+
+struct IMUData
+{
+  std::vector<double> time_ms, ax, ay, az, wx, wy, wz;
 };
 
 class Estimator
@@ -82,6 +88,7 @@ public:
     MARGIN_SECOND_NEW = 1
   };
 
+  std::unordered_map<int, IMUData> frame_to_imu_map;
   SolverFlag solver_flag;
   MarginalizationFlag marginalization_flag;
   Vector3d g;
@@ -118,6 +125,9 @@ public:
   bool first_imu;
   bool is_valid, is_key;
   bool failure_occur;
+
+  bool video_ = false;
+  bool video_timestamps_ = false;
 
   vector<Vector3d> point_cloud;
   vector<Vector3d> margin_cloud;
