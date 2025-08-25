@@ -2,6 +2,7 @@
 #include <map>
 #include <mutex>
 #include <opencv2/opencv.hpp>
+#include <opencv2/videoio.hpp>
 #include <queue>
 #include <stdio.h>
 #include <thread>
@@ -1029,6 +1030,20 @@ void LoadImages(const string &strImagePath, const string &strTimesStampsPath,
     }
   }
 }
+
+void fillImagesPath(const string &strImagePath, vector<string> &strImagesFileNames,
+                    const vector<double> &video_stamps)
+{
+  auto frame_size = video_stamps.size();
+  strImagesFileNames.reserve(frame_size);
+  for(int i = 0; i < frame_size; ++i)
+  {
+    std::stringstream ss;
+    ss << std::setw(6) << std::setfill('0') << i; // zero-padded (e.g., 000001)
+    std::string filename = strImagePath + "/" + ss.str() + ".png";
+    strImagesFileNames.push_back(filename);
+  }
+}
 /******************* load image end ***********************/
 
 /******************* load IMU begin ***********************/
@@ -1145,7 +1160,7 @@ mapFrameToIMU(const std::string &filename, const IMUData &imu_data)
   nlohmann::json j;
   file >> j;
   int cnt = 0;
-
+  int iter = 0;
   for(auto it = j.begin(); it != j.end(); ++it)
   {
     IMUData imu;
@@ -1153,13 +1168,14 @@ mapFrameToIMU(const std::string &filename, const IMUData &imu_data)
     std::vector<int> values = it.value().get<std::vector<int>>();
     for(int i = 0; i < values.size(); ++i)
     {
-      imu.time_ms.emplace_back(imu_data.time_ms.at(i));
-      imu.ax.emplace_back(imu_data.ax.at(i));
-      imu.ay.emplace_back(imu_data.ay.at(i));
-      imu.az.emplace_back(imu_data.az.at(i));
-      imu.wx.emplace_back(imu_data.wx.at(i));
-      imu.wy.emplace_back(imu_data.wy.at(i));
-      imu.wz.emplace_back(imu_data.wz.at(i));
+      imu.time_ms.emplace_back(imu_data.time_ms.at(iter));
+      imu.ax.emplace_back(imu_data.ax.at(iter));
+      imu.ay.emplace_back(imu_data.ay.at(iter));
+      imu.az.emplace_back(imu_data.az.at(iter));
+      imu.wx.emplace_back(imu_data.wx.at(iter));
+      imu.wy.emplace_back(imu_data.wy.at(iter));
+      imu.wz.emplace_back(imu_data.wz.at(iter));
+      iter++;
     }
     frame_imu_mapping[cnt] = imu;
     cnt++;
@@ -1185,7 +1201,7 @@ void LoadIMUJSON(const IMUData &imu_data, ros::Time img_timestamp)
     double t_ms = imu_data.time_ms.at(cnt);
 
     uint32_t sec = static_cast<uint32_t>(t_ms / 1000.0);
-    uint32_t nsec = static_cast<uint32_t>((t_ms - sec * 1000.0) * 1e6);
+    uint32_t nsec = static_cast<uint32_t>((t_ms - sec) * 1e6);
     nsec = (nsec / 1000) * 1000 + 500;
     imudata->header.stamp = ros::Time(sec, nsec);
 
@@ -1208,9 +1224,129 @@ setVideoTimestamps(const std::unordered_map<int, IMUData> &imu_mappings)
     const IMUData &imu_data = pair.second;
     video_timestamps.push_back(imu_data.time_ms[0]);
   }
-
+  std::sort(video_timestamps.begin(), video_timestamps.end());
   return video_timestamps;
 }
+
+// Convert degrees to radians
+inline double deg2rad(double deg) { return deg * CV_PI / 180.0; }
+
+template <typename T> inline T clamp(const T &v, const T &lo, const T &hi)
+{
+  return (v < lo) ? lo : (v > hi ? hi : v);
+}
+
+// Convert equirectangular frame to perspective view
+cv::Mat equirectangularToPerspective(const cv::Mat &frame,
+                                     float fov,   // horizontal FOV in degrees
+                                     float yaw,   // yaw in degrees
+                                     float pitch, // pitch in degrees
+                                     int outWidth, int outHeight)
+{
+  cv::Mat perspective(outHeight, outWidth, frame.type());
+
+  // Convert to radians
+  double fovRad = deg2rad(fov);
+  double yawRad = deg2rad(yaw);
+  double pitchRad = deg2rad(pitch);
+
+  // Camera focal length in pixels (from FOV)
+  double fx = outWidth / (2.0 * tan(fovRad / 2.0));
+  double fy = fx; // assume square pixels
+
+  // Image center
+  double cx = outWidth / 2.0;
+  double cy = outHeight / 2.0;
+
+  // Iterate over perspective image pixels
+  for(int v = 0; v < outHeight; v++)
+  {
+    for(int u = 0; u < outWidth; u++)
+    {
+      // normalized pixel coordinates (pinhole camera model)
+      double x = (u - cx) / fx;
+      double y = (v - cy) / fy;
+      double z = 1.0;
+
+      // normalize vector
+      double norm = sqrt(x * x + y * y + z * z);
+      x /= norm;
+      y /= norm;
+      z /= norm;
+
+      // Apply pitch rotation (around X axis)
+      double y2 = cos(pitchRad) * y - sin(pitchRad) * z;
+      double z2 = sin(pitchRad) * y + cos(pitchRad) * z;
+      y = y2;
+      z = z2;
+
+      // Apply yaw rotation (around Y axis)
+      double x2 = cos(yawRad) * x + sin(yawRad) * z;
+      double z3 = -sin(yawRad) * x + cos(yawRad) * z;
+      x = x2;
+      z = z3;
+
+      // Convert direction vector to spherical coords
+      double theta = atan2(x, z); // longitude [-pi, pi]
+      double phi = asin(y);       // latitude [-pi/2, pi/2]
+
+      // Map to equirectangular pixel coords
+      int eq_x = (int)((theta + CV_PI) / (2.0 * CV_PI) * frame.cols);
+      int eq_y = (int)((CV_PI / 2 - phi) / CV_PI * frame.rows);
+
+      // Wrap-around horizontally
+      eq_x = (eq_x + frame.cols) % frame.cols;
+      eq_y = clamp(eq_y, 0, frame.rows - 1);
+
+      perspective.at<cv::Vec3b>(v, u) = frame.at<cv::Vec3b>(eq_y, eq_x);
+    }
+  }
+
+  return perspective;
+}
+
+void process360Video(const std::string &videoPath, float fov, float yaw, float pitch,
+                     int outWidth, int outHeight, bool saveFrames = false,
+                     const std::string &saveDir = "")
+{
+  cv::VideoCapture cap(videoPath);
+  if(!cap.isOpened())
+  {
+    std::cerr << "Error: Cannot open video file: " << videoPath << std::endl;
+    return;
+  }
+
+  cv::Mat frame;
+  int frameCount = 0;
+
+  while(true)
+  {
+    cap >> frame;
+    if(frame.empty())
+      break; // end of video
+
+    // Convert frame
+    cv::Mat perspective
+      = equirectangularToPerspective(frame, fov, yaw, pitch, outWidth, outHeight);
+
+    // Optionally save
+    if(saveFrames && !saveDir.empty())
+    {
+      cv::Mat gray;
+      char filename[256];
+      std::snprintf(filename, sizeof(filename), "%s/%06d.png", saveDir.c_str(),
+                    frameCount++);
+      cv::resize(perspective, perspective, cv::Size(outWidth, outHeight));
+      cv::flip(perspective, perspective, 0);
+      cv::cvtColor(perspective, gray, cv::COLOR_BGR2GRAY);
+      cv::imwrite(filename, gray);
+    }
+  }
+
+  cap.release();
+  cv::destroyAllWindows();
+}
+
 /******************* load IMU end ***********************/
 
 int main(int argc, char **argv)
@@ -1240,7 +1376,7 @@ int main(int argc, char **argv)
     video = true;
   if(visual_timestamps.rfind(".txt") == visual_format.size() - 4)
     image_timestamps = true;
-  if(imu_data_format.rfind(".json") == visual_format.size() - 5)
+  if(imu_data_format.rfind(".csv") == visual_format.size() - 5)
     imu_json = true;
 
   cv::Mat image;
@@ -1253,18 +1389,6 @@ int main(int argc, char **argv)
   for(int i = 0; i < NUM_OF_CAM; i++)
     trackerData[i].readIntrinsicParameter(CAM_NAMES[i]); // add
 
-  // Load from .mp4 file or
-  // Load from images
-  vector<string> vStrImagesFileNames;
-  vector<double> vTimeStamps;
-
-  // Process Image/Video
-  if(image_timestamps)
-  {
-    if(video)
-      throw std::runtime_error("For .txt timestamps the input should be Image Path!");
-    LoadImages(visual_format, visual_timestamps, vStrImagesFileNames, vTimeStamps);
-  }
   std::thread measurement_process{process};
 
   measurement_process.detach();
@@ -1286,11 +1410,16 @@ int main(int argc, char **argv)
   // Map frame to IMU
   std::unordered_map<int, IMUData> frame_to_map;
   IMUData imu_data;
+  vector<string> vStrImagesFileNames;
+  vector<double> vTimeStamps;
   if(video && !image_timestamps)
   {
+    std::cout << "PROCESSING VIDEO\n";
+    process360Video(visual_format, 90.0, 0.0, 0.0, 640, 480, true, "data/processed");
     imu_data = gatherIMUData(fImus);
     frame_to_map = mapFrameToIMU(visual_timestamps, imu_data);
     vTimeStamps = setVideoTimestamps(frame_to_map);
+    fillImagesPath("data/processed", vStrImagesFileNames, vTimeStamps);
   }
 
   // VIO LOOP
@@ -1314,15 +1443,7 @@ int main(int argc, char **argv)
 
     // Get the frame from video
     cv::Mat image;
-    if(video)
-    {
-      cv::VideoCapture cap(visual_format);
-      cap >> image;
-    }
-    else
-    {
-      image = cv::imread(vStrImagesFileNames[ni], cv::IMREAD_UNCHANGED);
-    }
+    image = cv::imread(vStrImagesFileNames[ni], cv::IMREAD_UNCHANGED);
 
     // Check if Image is properly loaded
     if(image.empty())
@@ -1344,7 +1465,7 @@ int main(int argc, char **argv)
                                         // consecutive frames,unit:second
     else if(ni > 0)                     // lastest frame
       T = tframe - vTimeStamps[ni - 1];
-
+    /*
     if(timeSpent < T)
       usleep((T - timeSpent) * 1e6); // sec->us:1e6
     else
@@ -1352,7 +1473,7 @@ int main(int argc, char **argv)
            << "process image speed too slow, larger than interval time "
               "between two "
               "consecutive frames"
-           << endl;
+           << endl; */
   }
   running_flag = false;
   while(!view_done) // main thread wait view thread used its data structure

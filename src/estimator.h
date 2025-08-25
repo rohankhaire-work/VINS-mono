@@ -23,6 +23,7 @@
 #include <queue>
 #include <opencv2/core/eigen.hpp>
 #include <nlohmann/json.hpp>
+#include <cmath>
 
 struct RetriveData
 {
