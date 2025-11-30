@@ -6,6 +6,8 @@
 #include <queue>
 #include <stdio.h>
 #include <thread>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
@@ -16,6 +18,7 @@
 #include "loop-closure/loop_closure.h"
 #include "parameters.h"
 #include "utility/visualization.h"
+#include "parser/dataset_factory.h"
 /****************** load image section ***********************/
 #include <chrono>
 #include <fstream>
@@ -969,425 +972,150 @@ void img_callback(const cv::Mat &show_img, const ros::Time &timestamp)
   //  ROS_INFO("whole feature tracker processing costs: %f", t_r.toc());
 }
 /******************* load image begin ***********************/
-void LoadVideoFrames(const string &strVideoPath, const string &strTimesStampsPath,
-                     vector<double> &timeStamps)
+void LoadVideoFrames(const std::string &videoPath, const std::string &outputDir)
 {
-  // Get total number of images
-  cv::VideoCapture cap(strVideoPath);
-  if(!cap.isOpened())
-  {
-    std::cerr << "Error opening video file: " << strVideoPath << std::endl;
-    return;
-  }
-  int frameCount = 0;
-  cv::Mat frame;
-  while(true)
-  {
-    cap >> frame;
-    if(frame.empty())
-      break;
+  // Create output directory (if exists, mkdir does nothing)
+  mkdir(outputDir.c_str(), 0777);
 
-    frameCount++;
-  }
-
-  ifstream fTimes;
-  fTimes.open(strTimesStampsPath.c_str());
-  timeStamps.reserve(frameCount);
-  while(!fTimes.eof())
-  {
-    string s;
-    getline(fTimes, s);
-    if(!s.empty())
-    {
-      stringstream ss;
-      ss << s;
-      double t;
-      ss >> t;
-      timeStamps.push_back(t / 1e9);
-    }
-  }
-}
-
-void LoadImages(const string &strImagePath, const string &strTimesStampsPath,
-                vector<string> &strImagesFileNames, vector<double> &timeStamps)
-{
-  ifstream fTimes;
-  fTimes.open(strTimesStampsPath.c_str());
-  timeStamps.reserve(5000); // reserve vector space
-  strImagesFileNames.reserve(5000);
-  while(!fTimes.eof())
-  {
-    string s;
-    getline(fTimes, s);
-    if(!s.empty())
-    {
-      stringstream ss;
-      ss << s;
-      strImagesFileNames.push_back(strImagePath + "/" + ss.str() + ".png");
-      double t;
-      ss >> t;
-      timeStamps.push_back(t / 1e9);
-    }
-  }
-}
-
-void fillImagesPath(const string &strImagePath, vector<string> &strImagesFileNames,
-                    const vector<double> &video_stamps)
-{
-  auto frame_size = video_stamps.size();
-  strImagesFileNames.reserve(frame_size);
-  for(int i = 0; i < frame_size; ++i)
-  {
-    std::stringstream ss;
-    ss << std::setw(6) << std::setfill('0') << i; // zero-padded (e.g., 000001)
-    std::string filename = strImagePath + "/" + ss.str() + ".png";
-    strImagesFileNames.push_back(filename);
-  }
-}
-/******************* load image end ***********************/
-
-/******************* load IMU begin ***********************/
-
-void LoadImus(ifstream &fImus, const ros::Time &imageTimestamp)
-{
-  while(!fImus.eof())
-  {
-    string s;
-    getline(fImus, s);
-    if(!s.empty())
-    {
-      char c = s.at(0);
-      if(c < '0' || c > '9') // remove first line in data.csv
-        continue;
-      stringstream ss;
-      ss << s;
-      double tmpd;
-      int cnt = 0;
-      double data[7];
-      while(ss >> tmpd)
-      {
-        data[cnt] = tmpd;
-        cnt++;
-        if(cnt == 7)
-          break;
-        if(ss.peek() == ',' || ss.peek() == ' ')
-          ss.ignore();
-      }
-      data[0] *= 1e-9; // convert to second unit
-      sensor_msgs::ImuPtr imudata(new sensor_msgs::Imu);
-      imudata->angular_velocity.x = data[1];
-      imudata->angular_velocity.y = data[2];
-      imudata->angular_velocity.z = data[3];
-      imudata->linear_acceleration.x = data[4];
-      imudata->linear_acceleration.y = data[5];
-      imudata->linear_acceleration.z = data[6];
-      uint32_t sec = data[0];
-      uint32_t nsec = (data[0] - sec) * 1e9;
-      nsec = (nsec / 1000) * 1000 + 500;
-      imudata->header.stamp = ros::Time(sec, nsec);
-      imu_callback(imudata);
-      if(imudata->header.stamp > imageTimestamp) // load all imu data produced in interval
-                                                 // time between two consecutive frams
-        break;
-    }
-  }
-}
-
-IMUData gatherIMUData(std::ifstream &fImus)
-{
-  IMUData imu_data;
-  std::string s;
-
-  while(std::getline(fImus, s))
-  {
-    if(s.empty())
-      continue;
-
-    double timestampMs, ax, ay, az, gx, gy, gz;
-    std::stringstream ss(s);
-    std::string tmp;
-
-    if(!(ss >> tmp >> timestampMs))
-      continue;   // TimestampMs:
-    ss.ignore(1); // skip comma
-
-    if(!(ss >> tmp >> ax))
-      continue;
-    ss.ignore(1);
-
-    if(!(ss >> tmp >> ay))
-      continue;
-    ss.ignore(1);
-
-    if(!(ss >> tmp >> az))
-      continue;
-    ss.ignore(1);
-
-    if(!(ss >> tmp >> gx))
-      continue;
-    ss.ignore(1);
-
-    if(!(ss >> tmp >> gy))
-      continue;
-    ss.ignore(1);
-
-    if(!(ss >> tmp >> gz))
-      continue;
-
-    imu_data.time_ms.push_back(timestampMs);
-    imu_data.ax.push_back(ax);
-    imu_data.ay.push_back(ay);
-    imu_data.az.push_back(az);
-    imu_data.wx.push_back(gx);
-    imu_data.wy.push_back(gy);
-    imu_data.wz.push_back(gz);
-  }
-
-  return imu_data;
-}
-
-std::unordered_map<int, IMUData>
-mapFrameToIMU(const std::string &filename, const IMUData &imu_data)
-{
-  std::unordered_map<int, IMUData> frame_imu_mapping;
-  std::ifstream file(filename);
-  if(!file.is_open())
-  {
-    std::cerr << "Cannot open JSON file: " << filename << std::endl;
-    return {};
-  }
-
-  nlohmann::json j;
-  file >> j;
-  int cnt = 0;
-  int iter = 0;
-  for(auto it = j.begin(); it != j.end(); ++it)
-  {
-    IMUData imu;
-    std::string key = it.key();
-    std::vector<int> values = it.value().get<std::vector<int>>();
-    for(int i = 0; i < values.size(); ++i)
-    {
-      imu.time_ms.emplace_back(imu_data.time_ms.at(iter));
-      imu.ax.emplace_back(imu_data.ax.at(iter));
-      imu.ay.emplace_back(imu_data.ay.at(iter));
-      imu.az.emplace_back(imu_data.az.at(iter));
-      imu.wx.emplace_back(imu_data.wx.at(iter));
-      imu.wy.emplace_back(imu_data.wy.at(iter));
-      imu.wz.emplace_back(imu_data.wz.at(iter));
-      iter++;
-    }
-    frame_imu_mapping[cnt] = imu;
-    cnt++;
-  }
-
-  return frame_imu_mapping;
-}
-
-void LoadIMUJSON(const IMUData &imu_data, ros::Time img_timestamp)
-{
-  int cnt = 0;
-  // Iterate through the associated frame
-  while(true)
-  {
-    sensor_msgs::ImuPtr imudata(new sensor_msgs::Imu);
-    imudata->angular_velocity.x = imu_data.wx.at(cnt);
-    imudata->angular_velocity.y = imu_data.wy.at(cnt);
-    imudata->angular_velocity.z = imu_data.wz.at(cnt);
-    imudata->linear_acceleration.x = imu_data.ax.at(cnt);
-    imudata->linear_acceleration.y = imu_data.ay.at(cnt);
-    imudata->linear_acceleration.z = imu_data.az.at(cnt);
-
-    double t_ms = imu_data.time_ms.at(cnt);
-
-    uint32_t sec = static_cast<uint32_t>(t_ms / 1000.0);
-    uint32_t nsec = static_cast<uint32_t>((t_ms - sec) * 1e6);
-    nsec = (nsec / 1000) * 1000 + 500;
-    imudata->header.stamp = ros::Time(sec, nsec);
-
-    if(imudata->header.stamp > img_timestamp)
-      break;
-
-    imu_callback(imudata);
-    cnt++;
-  }
-}
-
-std::vector<double>
-setVideoTimestamps(const std::unordered_map<int, IMUData> &imu_mappings)
-{
-  std::vector<double> video_timestamps;
-  video_timestamps.reserve(imu_mappings.size());
-
-  for(const auto &pair : imu_mappings)
-  {
-    const IMUData &imu_data = pair.second;
-    video_timestamps.push_back(imu_data.time_ms[0]);
-  }
-  std::sort(video_timestamps.begin(), video_timestamps.end());
-  return video_timestamps;
-}
-
-// Convert degrees to radians
-inline double deg2rad(double deg) { return deg * CV_PI / 180.0; }
-
-template <typename T> inline T clamp(const T &v, const T &lo, const T &hi)
-{
-  return (v < lo) ? lo : (v > hi ? hi : v);
-}
-
-// Convert equirectangular frame to perspective view
-cv::Mat equirectangularToPerspective(const cv::Mat &frame,
-                                     float fov,   // horizontal FOV in degrees
-                                     float yaw,   // yaw in degrees
-                                     float pitch, // pitch in degrees
-                                     int outWidth, int outHeight)
-{
-  cv::Mat perspective(outHeight, outWidth, frame.type());
-
-  // Convert to radians
-  double fovRad = deg2rad(fov);
-  double yawRad = deg2rad(yaw);
-  double pitchRad = deg2rad(pitch);
-
-  // Camera focal length in pixels (from FOV)
-  double fx = outWidth / (2.0 * tan(fovRad / 2.0));
-  double fy = fx; // assume square pixels
-
-  // Image center
-  double cx = outWidth / 2.0;
-  double cy = outHeight / 2.0;
-
-  // Iterate over perspective image pixels
-  for(int v = 0; v < outHeight; v++)
-  {
-    for(int u = 0; u < outWidth; u++)
-    {
-      // normalized pixel coordinates (pinhole camera model)
-      double x = (u - cx) / fx;
-      double y = (v - cy) / fy;
-      double z = 1.0;
-
-      // normalize vector
-      double norm = sqrt(x * x + y * y + z * z);
-      x /= norm;
-      y /= norm;
-      z /= norm;
-
-      // Apply pitch rotation (around X axis)
-      double y2 = cos(pitchRad) * y - sin(pitchRad) * z;
-      double z2 = sin(pitchRad) * y + cos(pitchRad) * z;
-      y = y2;
-      z = z2;
-
-      // Apply yaw rotation (around Y axis)
-      double x2 = cos(yawRad) * x + sin(yawRad) * z;
-      double z3 = -sin(yawRad) * x + cos(yawRad) * z;
-      x = x2;
-      z = z3;
-
-      // Convert direction vector to spherical coords
-      double theta = atan2(x, z); // longitude [-pi, pi]
-      double phi = asin(y);       // latitude [-pi/2, pi/2]
-
-      // Map to equirectangular pixel coords
-      int eq_x = (int)((theta + CV_PI) / (2.0 * CV_PI) * frame.cols);
-      int eq_y = (int)((CV_PI / 2 - phi) / CV_PI * frame.rows);
-
-      // Wrap-around horizontally
-      eq_x = (eq_x + frame.cols) % frame.cols;
-      eq_y = clamp(eq_y, 0, frame.rows - 1);
-
-      perspective.at<cv::Vec3b>(v, u) = frame.at<cv::Vec3b>(eq_y, eq_x);
-    }
-  }
-
-  return perspective;
-}
-
-void process360Video(const std::string &videoPath, float fov, float yaw, float pitch,
-                     int outWidth, int outHeight, bool saveFrames = false,
-                     const std::string &saveDir = "")
-{
   cv::VideoCapture cap(videoPath);
   if(!cap.isOpened())
   {
-    std::cerr << "Error: Cannot open video file: " << videoPath << std::endl;
+    std::cerr << "Failed to open video: " << videoPath << std::endl;
     return;
   }
 
+  int frameId = 0;
   cv::Mat frame;
-  int frameCount = 0;
 
-  while(true)
+  while(cap.read(frame))
   {
-    cap >> frame;
-    if(frame.empty())
-      break; // end of video
+    cv::Mat gray;
+    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
 
-    // Convert frame
-    cv::Mat perspective
-      = equirectangularToPerspective(frame, fov, yaw, pitch, outWidth, outHeight);
+    std::ostringstream name;
+    name << "frame_" << std::setw(6) << std::setfill('0') << frameId << ".png";
 
-    // Optionally save
-    if(saveFrames && !saveDir.empty())
-    {
-      cv::Mat gray;
-      char filename[256];
-      std::snprintf(filename, sizeof(filename), "%s/%06d.png", saveDir.c_str(),
-                    frameCount++);
-      cv::resize(perspective, perspective, cv::Size(outWidth, outHeight));
-      cv::flip(perspective, perspective, 0);
-      cv::cvtColor(perspective, gray, cv::COLOR_BGR2GRAY);
-      cv::imwrite(filename, gray);
-    }
+    std::string filepath = outputDir + "/" + name.str();
+
+    cv::imwrite(filepath, gray);
+
+    frameId++;
   }
-
-  cap.release();
-  cv::destroyAllWindows();
 }
 
+/******************* load IMU begin ***********************/
+void LoadImus(vector<ImuData> &fImus, const ros::Time &imageTimestamp)
+{
+  while(!fImus.empty())
+  {
+    // take the first IMU in the list
+    const ImuData &data = fImus.front();
+
+    // convert timestamp
+    uint32_t sec = data.timestamp;
+    uint32_t nsec = (data.timestamp - sec) * 1e9;
+    nsec = (nsec / 1000) * 1000 + 500;
+    ros::Time imu_stamp(sec, nsec);
+
+    // If IMU timestamp is already ahead of image timestamp — STOP
+    if(imu_stamp > imageTimestamp)
+      break;
+
+    // Prepare ROS IMU msg
+    sensor_msgs::ImuPtr imudata(new sensor_msgs::Imu);
+    imudata->angular_velocity.x = data.wx;
+    imudata->angular_velocity.y = data.wy;
+    imudata->angular_velocity.z = data.wz;
+    imudata->linear_acceleration.x = data.ax;
+    imudata->linear_acceleration.y = data.ay;
+    imudata->linear_acceleration.z = data.az;
+    imudata->header.stamp = imu_stamp;
+
+    // Use this IMU measurement
+    imu_callback(imudata);
+
+    // Remove the IMU we just consumed
+    fImus.erase(fImus.begin());
+  }
+}
 /******************* load IMU end ***********************/
+
+bool FileExists(const std::string &path)
+{
+  std::ifstream f(path);
+  return f.good();
+}
+
+std::string RemoveTrailingSlash(const std::string &s)
+{
+  if(!s.empty() && s.back() == '/')
+    return s.substr(0, s.size() - 1);
+  return s;
+}
+
+std::string ParentPath(const std::string &path)
+{
+  std::string clean = RemoveTrailingSlash(path);
+  size_t pos = clean.find_last_of('/');
+  if(pos == std::string::npos)
+    return clean; // no slash found
+  return clean.substr(0, pos);
+}
 
 int main(int argc, char **argv)
 {
   /******************* load image begin ***********************/
-  if(argc != 5)
+  if(argc != 6)
   {
     cerr << endl
          << "Usage: ./vins_estimator path_to_setting_file "
-            "path_to_image_folder "
-            "path_to_times_file path_to_imu_data_file"
+            "path_to_image_data_file path_to_imu_data_file path_to_dataset_images "
+            "dataset_type"
          << endl;
     return 1;
   }
 
-  // imu data file
-  ifstream fImus(argv[4]);
-
-  // Set correct flag
-  bool video = false;
-  bool image_timestamps = false;
-  bool imu_json = false;
-  auto visual_format = string(argv[2]);
-  auto visual_timestamps = string(argv[3]);
-  auto imu_data_format = string(argv[4]);
-  if(visual_format.rfind(".mp4") == visual_format.size() - 4)
-    video = true;
-  if(visual_timestamps.rfind(".txt") == visual_format.size() - 4)
-    image_timestamps = true;
-  if(imu_data_format.rfind(".csv") == visual_format.size() - 5)
-    imu_json = true;
+  // dataset type
+  string datasetType = argv[5];
 
   cv::Mat image;
-  size_t ni; // num image
+  int ni; // num image
 
   // read parameters section
-  readParameters(string(argv[1]));
+  readParameters(argv[1]);
 
   estimator.setParameter();
   for(int i = 0; i < NUM_OF_CAM; i++)
     trackerData[i].readIntrinsicParameter(CAM_NAMES[i]); // add
+
+  // Save video frames if input is a video
+  string parent = ParentPath(string(argv[4]));
+  string video_path = parent + "/video.mp4";
+  if(FileExists(video_path))
+  {
+    LoadVideoFrames(video_path, string(argv[4]));
+  }
+  else
+  {
+    std::cout << "Video NOT found: " << video_path << std::endl;
+  }
+
+  DatasetParser *parser = DatasetFactory::Create(datasetType);
+  if(!parser)
+    return -1;
+
+  std::vector<ImuData> imus;
+  std::vector<ImageData> images;
+
+  parser->LoadIMU(string(argv[3]), imus);
+  parser->LoadImages(string(argv[2]), string(argv[4]), images);
+  int imageNum = images.size();
+
+  if(imageNum <= 0)
+  {
+    cerr << "ERROR: Failed to load images" << endl;
+    return 1;
+  }
 
   std::thread measurement_process{process};
 
@@ -1406,52 +1134,24 @@ int main(int argc, char **argv)
     // pose_graph.join();
     m_camera = CameraFactory::instance()->generateCameraFromYamlFile(CAM_NAMES_ESTIMATOR);
   }
-
-  // Map frame to IMU
-  std::unordered_map<int, IMUData> frame_to_map;
-  IMUData imu_data;
-  vector<string> vStrImagesFileNames;
-  vector<double> vTimeStamps;
-  if(video && !image_timestamps)
+  for(ni = 0; ni < imageNum; ni++)
   {
-    std::cout << "PROCESSING VIDEO\n";
-    process360Video(visual_format, 90.0, 0.0, 0.0, 640, 480, true, "data/processed");
-    imu_data = gatherIMUData(fImus);
-    frame_to_map = mapFrameToIMU(visual_timestamps, imu_data);
-    vTimeStamps = setVideoTimestamps(frame_to_map);
-    fillImagesPath("data/processed", vStrImagesFileNames, vTimeStamps);
-  }
-
-  // VIO LOOP
-  for(ni = 0; ni < vTimeStamps.size(); ni++)
-  {
-    double tframe = vTimeStamps[ni]; // timestamp
-    uint32_t sec = static_cast<uint32_t>(tframe / 1e3);
-    uint32_t nsec = static_cast<uint32_t>((tframe - sec * 1000.0) * 1e6);
+    double tframe = images[ni].timestamp; // timestamp
+    uint32_t sec = tframe;
+    uint32_t nsec = (tframe - sec) * 1e9;
     nsec = (nsec / 1000) * 1000 + 500;
     ros::Time image_timestamp = ros::Time(sec, nsec);
-
     // read imu data
-    if(imu_json)
-    {
-      LoadImus(fImus, image_timestamp);
-    }
-    else
-    {
-      LoadIMUJSON(imu_data, image_timestamp);
-    }
+    LoadImus(imus, image_timestamp);
 
-    // Get the frame from video
-    cv::Mat image;
-    image = cv::imread(vStrImagesFileNames[ni], cv::IMREAD_UNCHANGED);
+    // read image from file
+    image = cv::imread(images[ni].filename, cv::IMREAD_UNCHANGED);
 
-    // Check if Image is properly loaded
     if(image.empty())
     {
-      cerr << endl << "Failed to load image: " << vStrImagesFileNames[ni] << endl;
+      cerr << endl << "Failed to load image: " << images[ni].filename << endl;
       return 1;
     }
-
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     img_callback(image, image_timestamp);
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -1460,20 +1160,19 @@ int main(int argc, char **argv)
 
     // wait to load the next frame image
     double T = 0;
-    if(ni < vTimeStamps.size() - 1)
-      T = vTimeStamps[ni + 1] - tframe; // interval time between two
-                                        // consecutive frames,unit:second
-    else if(ni > 0)                     // lastest frame
-      T = tframe - vTimeStamps[ni - 1];
-    /*
+    if(ni < imageNum - 1)
+      T = images[ni + 1].timestamp
+          - tframe; // interval time between two consecutive frames,unit:second
+    else if(ni > 0) // lastest frame
+      T = tframe - images[ni - 1].timestamp;
+
     if(timeSpent < T)
       usleep((T - timeSpent) * 1e6); // sec->us:1e6
     else
       cerr << endl
-           << "process image speed too slow, larger than interval time "
-              "between two "
+           << "process image speed too slow, larger than interval time between two "
               "consecutive frames"
-           << endl; */
+           << endl;
   }
   running_flag = false;
   while(!view_done) // main thread wait view thread used its data structure

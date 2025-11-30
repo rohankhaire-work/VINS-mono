@@ -15,13 +15,13 @@ distortion_parameters:
    p1: 5.333e-05
    p2: -1.578e-04
 projection_parameters:
-   fx: 4.616e+02
-   fy: 4.603e+02
-   cx: 3.630e+02
-   cy: 2.481e+02
+   fx: 544.2
+   fy: 408.15
+   cx: 320.0
+   cy: 240.0
 
 # Extrinsic parameter between IMU and Camera.
-estimate_extrinsic: 1   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
                         # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
                         # 2  Don't know anything about extrinsic parameters. You don't need to give R,T. We will try to calibrate it. Do some rotation movement at beginning. 
 ex_calib_result_path: "/config/ex_calib_result.yaml"  # If you choose 1 or 2, the extrinsic calibration result will be written vins_folder_path + ex_calib_result_path.                        
@@ -31,15 +31,15 @@ extrinsicRotation: !!opencv-matrix
    rows: 3
    cols: 3
    dt: d
-   data: [0, -1, 0, 
-           1, 0, 0, 
+   data: [ 1, 0, 0, 
+           0, 1, 0, 
            0, 0, 1]
 #Translation from camera frame to imu frame, imu^T_cam
 extrinsicTranslation: !!opencv-matrix
    rows: 3
    cols: 1
    dt: d
-   data: [-0.02,-0.06, 0.01]
+   data: [0.0,0.0, 0.0]
 
 #feature traker paprameters
 max_cnt: 150            # max feature number in feature tracking
@@ -56,11 +56,11 @@ max_num_iterations: 8   # max solver itrations, to guarantee real time
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
 #imu parameters       The more accurate parameters you provide, the better performance
-acc_n: 0.2          # accelerometer measurement noise standard deviation. #0.2
-gyr_n: 0.02         # gyroscope measurement noise standard deviation.     #0.05
-acc_w: 0.0002         # accelerometer bias random work noise standard deviation.  #0.02
-gyr_w: 2.0e-5       # gyroscope bias random work noise standard deviation.     #4.0e-5
-g_norm: 9.81007     # gravity magnitude
+acc_n: 0.02      # accelerometer noise (m/s^2 / sqrt(Hz))
+gyr_n: 0.002     # gyroscope noise (rad/s / sqrt(Hz))
+acc_w: 0.00004   # accelerometer random walk
+gyr_w: 2.0e-6 
+g_norm: 9.18883105     # gravity magnitude
 
 
 #loop closure parameters

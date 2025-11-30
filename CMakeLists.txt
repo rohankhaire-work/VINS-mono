@@ -54,6 +54,13 @@ add_executable(vins_estimator
     src/camera_model/src/sparse_graph/Transform.cc
     src/camera_model/src/gpl/gpl.cc
     src/camera_model/src/gpl/EigenQuaternionParameterization.cc
+    src/parser/dataset_parser.h
+    src/parser/dataset_factory.h
+    src/parser/dataset_factory.cpp
+    src/parser/euroc_parser.cpp
+    src/parser/tumvi_parser.cpp
+    src/parser/uzh_parser.cpp
+    src/parser/simulation_parser.cpp
     )
 
 target_include_directories(vins_estimator PRIVATE src

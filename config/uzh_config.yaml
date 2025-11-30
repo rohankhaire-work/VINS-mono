@@ -1,0 +1,97 @@
+%YAML:1.0
+#====================================
+# Common parameters
+#====================================
+imu_topic: "/imu0"
+image_topic: "/cam0/image_raw"
+output_path: "/config/vins_result.csv"
+
+#====================================
+# Camera calibration (DAVIS346 APS)
+#====================================
+model_type: PINHOLE
+camera_name: camera
+
+# UZH FPV DAVIS APS resolution
+image_width: 346
+image_height: 260
+
+# Distortion (from calibration)
+distortion_parameters:
+    k1: -0.0291
+    k2: 0.0026
+    p1: 0.00037
+    p2: -0.00042
+
+# Intrinsics (fx, fy, cx, cy)
+projection_parameters:
+    fx: 279.06
+    fy: 279.32
+    cx: 169.33
+    cy: 124.35
+
+#====================================
+# Extrinsics between IMU and Camera
+#====================================
+# NOTE: DAVIS IMU → APS camera extrinsic from UZH calibration
+estimate_extrinsic: 0
+ex_calib_result_path: "/config/ex_calib_result.yaml"
+
+# Rotation (imu^R_cam)
+extrinsicRotation: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [ 0.999602, -0.028176, -0.000245,
+           0.028175,  0.999602, -0.000594,
+           0.000262,  0.000587,  1.000000 ]
+
+# Translation (imu^T_cam) in meters
+extrinsicTranslation: !!opencv-matrix
+   rows: 3
+   cols: 1
+   dt: d
+   data: [0.00346,
+          0.00088,
+          0.00183]
+
+#====================================
+# Feature tracker parameters
+#====================================
+max_cnt: 200
+min_dist: 10
+freq: 10
+F_threshold: 1.0
+show_track: 0
+equalize: 1
+fisheye: 0
+
+#====================================
+# Optimization parameters
+#====================================
+max_solver_time: 0.04
+max_num_iterations: 8
+keyframe_parallax: 5.0
+
+#====================================
+# IMU parameters (DAVIS IMU)
+#====================================
+# These are accurate Kalibr parameters for UZH-FPV
+acc_n: 0.0015      # m/s^2 / sqrt(Hz)
+gyr_n: 0.0002      # rad/s / sqrt(Hz)
+acc_w: 0.00025     # m/s^3 / sqrt(Hz)
+gyr_w: 2.0e-5      # rad/s^2 / sqrt(Hz)
+g_norm: 9.81007
+
+#====================================
+# Loop closure parameters
+#====================================
+loop_closure: 1
+pattern_file: "/support_files/brief_pattern.yml"
+voc_file: "/support_files/brief_k10L6.bin"
+min_loop_num: 25
+
+visualLookAtX: 1
+visualLookAtY: 0
+visualLookAtZ: 1
+
