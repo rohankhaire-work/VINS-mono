@@ -9,7 +9,7 @@ output_path: "/config/vins_result.csv"
 #====================================
 # Camera calibration (DAVIS346 APS)
 #====================================
-model_type: PINHOLE
+model_type: KANNALA_BRANDT
 camera_name: camera
 
 # UZH FPV DAVIS APS resolution
@@ -17,18 +17,19 @@ image_width: 346
 image_height: 260
 
 # Distortion (from calibration)
-distortion_parameters:
-    k1: -0.0291
-    k2: 0.0026
-    p1: 0.00037
-    p2: -0.00042
+
+    
 
 # Intrinsics (fx, fy, cx, cy)
 projection_parameters:
-    fx: 279.06
-    fy: 279.32
-    cx: 169.33
-    cy: 124.35
+    k2: -0.0291
+    k3: 0.0026
+    k4: 0.00037
+    k5: -0.00042
+    mu: 174.23979032083346
+    mv: 174.11105443010973
+    u0: 163.91078563399876
+    v0: 140.9726709818771
 
 #====================================
 # Extrinsics between IMU and Camera
@@ -42,18 +43,18 @@ extrinsicRotation: !!opencv-matrix
    rows: 3
    cols: 3
    dt: d
-   data: [ 0.999602, -0.028176, -0.000245,
-           0.028175,  0.999602, -0.000594,
-           0.000262,  0.000587,  1.000000 ]
+   data: [ 0.99988297, -0.00543262,  0.01430181,
+           0.00533541,  0.99996247,  0.00682647,
+           -0.01433836, -0.00674936,  0.99987442]
 
 # Translation (imu^T_cam) in meters
 extrinsicTranslation: !!opencv-matrix
    rows: 3
    cols: 1
    dt: d
-   data: [0.00346,
-          0.00088,
-          0.00183]
+   data: [0.00181741,
+          0.00678784,
+          0.02308541]
 
 #====================================
 # Feature tracker parameters
@@ -77,11 +78,11 @@ keyframe_parallax: 5.0
 # IMU parameters (DAVIS IMU)
 #====================================
 # These are accurate Kalibr parameters for UZH-FPV
-acc_n: 0.0015      # m/s^2 / sqrt(Hz)
-gyr_n: 0.0002      # rad/s / sqrt(Hz)
-acc_w: 0.00025     # m/s^3 / sqrt(Hz)
-gyr_w: 2.0e-5      # rad/s^2 / sqrt(Hz)
-g_norm: 9.81007
+acc_n: 0.1      # m/s^2 / sqrt(Hz)
+gyr_n: 0.005      # rad/s / sqrt(Hz)
+acc_w: 0.002     # m/s^3 / sqrt(Hz)
+gyr_w: 4.0e-5      # rad/s^2 / sqrt(Hz)
+g_norm: -9.4668998
 
 #====================================
 # Loop closure parameters
